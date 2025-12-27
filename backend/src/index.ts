@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import connectDB from "./config/database.ts";
 import type { Request, Response, NextFunction } from "express";
 import productsRouter from "./routes/product.routes.ts";
+import categoryRouter from "./routes/category.routes.ts";
 
 dotenv.config();
 
@@ -13,6 +14,9 @@ connectDB();
 
 // Attach product routes
 app.use("/api/v1/products", productsRouter);
+
+// Attach category routes
+app.use("/api/v1/categories", categoryRouter);
 
 // Error handling middleware (must be after routes)
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
