@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import Product from "../models/Product.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { log } from "console";
 
 // POST /products
 export const createProduct = asyncHandler(async (req: Request, res: Response) => {
@@ -100,15 +101,17 @@ export const deleteProductsByCategory = asyncHandler(async (req: Request, res: R
 // GET /products/search?q=keyword
 export const searchProducts = asyncHandler(async (req: Request, res: Response) => {
   const { q } = req.query;
+  const start= Date.now();
 
   if (!q || typeof q !== "string") {
     return res.status(400).json({ message: "Search query is required" });
   }
 
   const products = await Product.find({
-    isActive: true,
     name: { $regex: q, $options: "i" },
   });
+  const end = Date.now();
+  console.log(`Products search fetched in ${end - start}ms`);
 
   if (products.length === 0) {
     return res.status(404).json({ message: "No products found" });
