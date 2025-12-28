@@ -4,13 +4,30 @@ import { asyncHandler } from "../utils/asyncHandler.ts";
 
 // POST /products
 export const createProduct = asyncHandler(async (req: Request, res: Response) => {
-  const product = await Product.create(req.body);
-  res.status(201).json(product);
+  const start = Date.now();
+  const products = req.body; // expecting array
+
+  if (!Array.isArray(products)) {
+    return res.status(400).json({ message: "Expected an array of products" });
+  }
+
+  const createdProducts = await Product.insertMany(products);
+  const end = Date.now();
+  console.log(`Products created in ${end - start}ms`);
+
+  res.status(201).json({
+    message: "Products created successfully",
+    count: createdProducts.length,
+    data: createdProducts
+  });
 });
 
 // GET /products
 export const getAllProducts = asyncHandler(async (_req: Request, res: Response) => {
+  const start = Date.now();
   const products = await Product.find();
+  const end = Date.now();
+  console.log(`Products fetched in ${end - start}ms`);
   res.json(products);
 });
 
@@ -52,16 +69,32 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response) =>
 // GET /products/category/:categoryId
 export const getProductsByCategory = asyncHandler(async (req: Request, res: Response) => {
   const { categoryId } = req.params;
+  const start= Date.now();
   const products = await Product.find({
     categoryId,
-    isActive: true,
   });
-
+  const end = Date.now();
+  console.log(`Products by category fetched in ${end - start}ms`);
   if (products.length === 0) {
     return res.status(404).json({ message: "No products found for this category" });
   }
 
   res.json(products);
+});
+
+// DELETE /products/category/:categoryId
+export const deleteProductsByCategory = asyncHandler(async (req: Request, res: Response) => {
+  const { categoryId } = req.params;
+
+  const result = await Product.deleteMany({ categoryId });
+  if (result.deletedCount === 0) {
+    return res.status(404).json({ message: "No products found for this category" });
+  }
+
+  res.json({
+    message: "Products deleted successfully",
+    deletedCount: result.deletedCount
+  });
 });
 
 // GET /products/search?q=keyword
