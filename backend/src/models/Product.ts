@@ -6,7 +6,6 @@ export interface IProduct extends Document {
   price: number;
   categoryId: mongoose.Types.ObjectId;
   images: string[];
-  stock: number;
   ratingAvg: number;
   ratingCount: number;
   createdAt?: Date;
@@ -20,9 +19,8 @@ const productSchema = new Schema<IProduct>(
     price: { type: Number, required: true },
     categoryId: { type: Schema.Types.ObjectId, ref: "Category", required: true },
     images: [{ type: String }],
-    stock: { type: Number, default: 0 },
-    ratingAvg: { type: Number, default: 0 },
-    ratingCount: { type: Number, default: 0 },
+    ratingAvg: { type: Number },
+    ratingCount: { type: Number },
   },
   { timestamps: true }
 );
