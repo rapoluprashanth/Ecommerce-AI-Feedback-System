@@ -10,7 +10,7 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
 
 // GET /products
 export const getAllProducts = asyncHandler(async (_req: Request, res: Response) => {
-  const products = await Product.find({ isActive: true });
+  const products = await Product.find();
   res.json(products);
 });
 

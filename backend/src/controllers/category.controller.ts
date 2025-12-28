@@ -10,7 +10,7 @@ export const createCategory = asyncHandler(async (req: Request, res: Response) =
 
 // GET /categories
 export const getAllCategories = asyncHandler(async (_req: Request, res: Response) => {
-  const categories = await Category.find({ isActive: true });
+  const categories = await Category.find();
   res.json(categories);
 });
 
