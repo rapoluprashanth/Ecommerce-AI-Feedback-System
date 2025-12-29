@@ -25,4 +25,13 @@ const productSchema = new Schema<IProduct>(
   { timestamps: true }
 );
 
+//Index for category filtering
+productSchema.index({ categoryId: 1 });
+
+//Text index for search
+productSchema.index({
+  name: "text",
+  description: "text",
+});
+
 export default mongoose.model<IProduct>("Product", productSchema);
