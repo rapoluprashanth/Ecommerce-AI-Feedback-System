@@ -13,4 +13,7 @@ const categorySchema = new Schema<ICategory>(
     { timestamps: true }
 );
 
+// Text index for search
+categorySchema.index({ name: "text" });
+
 export default mongoose.model<ICategory>("Category", categorySchema);
