@@ -70,7 +70,7 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response) =>
 // GET /products/category/:categoryId
 export const getProductsByCategory = asyncHandler(async (req: Request, res: Response) => {
   const { categoryId } = req.params;
-  const start= Date.now();
+  const start = Date.now();
   const products = await Product.find({
     categoryId,
   });
@@ -101,15 +101,17 @@ export const deleteProductsByCategory = asyncHandler(async (req: Request, res: R
 // GET /products/search?q=keyword
 export const searchProducts = asyncHandler(async (req: Request, res: Response) => {
   const { q } = req.query;
-  const start= Date.now();
+  const start = Date.now();
 
   if (!q || typeof q !== "string") {
     return res.status(400).json({ message: "Search query is required" });
   }
 
-  const products = await Product.find({
-    name: { $regex: q, $options: "i" },
-  });
+  const products = await Product.find(
+    { $text: { $search: q } },
+    { score: { $meta: "textScore" } }
+  ).sort({ score: { $meta: "textScore" } });
+
   const end = Date.now();
   console.log(`Products search fetched in ${end - start}ms`);
 

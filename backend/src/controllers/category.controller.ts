@@ -57,10 +57,10 @@ export const searchCategories = asyncHandler(async (req: Request, res: Response)
     return res.status(400).json({ message: "Search query is required" });
   }
 
-  const categories = await Category.find({
-    isActive: true,
-    name: { $regex: q, $options: "i" },
-  });
+  const categories = await Category.find(
+    { $text: { $search: q } },
+    { score: { $meta: "textScore" } }
+  ).sort({ score: { $meta: "textScore" } });
 
   if (categories.length === 0) {
     return res.status(404).json({ message: "No categories found" });
