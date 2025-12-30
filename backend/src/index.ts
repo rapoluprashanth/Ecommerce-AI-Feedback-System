@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/database.ts";
+import redisClient, { connectRedis } from "./config/redis.ts";
 import type { Request, Response, NextFunction } from "express";
 import productsRouter from "./routes/product.routes.ts";
 import categoryRouter from "./routes/category.routes.ts";
@@ -11,6 +12,7 @@ const app = express();
 app.use(express.json());
 
 connectDB();
+connectRedis().catch(error => console.error("Failed to connect to Redis:", error)); 
 
 // Attach product routes
 app.use("/api/v1/products", productsRouter);
