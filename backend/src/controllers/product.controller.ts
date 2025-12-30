@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import Product from "../models/Product.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import redisClient from "../config/redis.ts";
 import { log } from "console";
 
 // POST /products
@@ -25,10 +26,29 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
 
 // GET /products
 export const getAllProducts = asyncHandler(async (_req: Request, res: Response) => {
-  const start = Date.now();
+  const CACHE_KEY = "products:all";
+  const CACHE_TTL = parseInt(process.env.CACHE_TTL || "60"); // Default 1 hour
+
+  // Check Redis cache first
+  const redisStart = process.hrtime.bigint();
+  const cachedData = await redisClient.get(CACHE_KEY);
+  const redisEnd = process.hrtime.bigint()
+  if (cachedData) {
+    const redisTime = Number(redisEnd - redisStart) / 1_000_000;
+    console.log(`[CACHE HIT] Redis GET took ${redisTime.toFixed(2)}ms`);
+    return res.json(JSON.parse(cachedData));
+  }
+
+  console.log(`[CACHE MISS] Fetching products from MongoDB`);
+  const dbStart = Date.now();
   const products = await Product.find();
-  const end = Date.now();
-  console.log(`Products fetched in ${end - start}ms`);
+  const dbDuration = Date.now() - dbStart;
+
+  console.log(`[DB] Products fetched in ${dbDuration}ms`);
+
+  // Store in Redis cache
+  await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(products));
+
   res.json(products);
 });
 
