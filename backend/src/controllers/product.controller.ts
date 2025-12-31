@@ -27,7 +27,6 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
 // GET /products
 export const getAllProducts = asyncHandler(async (_req: Request, res: Response) => {
   const CACHE_KEY = "products:all";
-  const CACHE_TTL = parseInt(process.env.CACHE_TTL || "60"); // Default 1 hour
 
   // Check Redis cache first
   const redisStart = process.hrtime.bigint();
@@ -47,7 +46,7 @@ export const getAllProducts = asyncHandler(async (_req: Request, res: Response) 
   console.log(`[DB] Products fetched in ${dbDuration}ms`);
 
   // Store in Redis cache
-  await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(products));
+  await redisClient.setEx(CACHE_KEY, parseInt(process.env.CACHE_TTL || "3600"), JSON.stringify(products));
 
   res.json(products);
 });
@@ -90,16 +89,22 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response) =>
 // GET /products/category/:categoryId
 export const getProductsByCategory = asyncHandler(async (req: Request, res: Response) => {
   const { categoryId } = req.params;
-  const start = Date.now();
-  const products = await Product.find({
-    categoryId,
-  });
-  const end = Date.now();
-  console.log(`Products by category fetched in ${end - start}ms`);
+  const CACHE_KEY = `products:category:${categoryId}`;
+
+  // Check Redis cache first
+  const cachedData = await redisClient.get(CACHE_KEY);
+  if (cachedData) {
+    return res.json(JSON.parse(cachedData));
+  }
+
+  const products = await Product.find({ categoryId });
   if (products.length === 0) {
     return res.status(404).json({ message: "No products found for this category" });
   }
 
+  // Store in Redis cache
+  await redisClient.setEx(CACHE_KEY, parseInt(process.env.CACHE_TTL || "3600"), JSON.stringify(products));
+  
   res.json(products);
 });
 
@@ -121,23 +126,32 @@ export const deleteProductsByCategory = asyncHandler(async (req: Request, res: R
 // GET /products/search?q=keyword
 export const searchProducts = asyncHandler(async (req: Request, res: Response) => {
   const { q } = req.query;
-  const start = Date.now();
 
   if (!q || typeof q !== "string") {
     return res.status(400).json({ message: "Search query is required" });
   }
 
+  const normalizedQuery = q.trim().toLowerCase();
+
+  const CACHE_KEY = `products:search:${normalizedQuery}`;
+  const SEARCH_CACHE_TTL = 300; // Shorter TTL for search results
+
+  const cachedData = await redisClient.get(CACHE_KEY);
+
+  if (cachedData) {
+    return res.json(JSON.parse(cachedData));
+  }
+
   const products = await Product.find(
-    { $text: { $search: q } },
+    { $text: { $search: normalizedQuery } },
     { score: { $meta: "textScore" } }
   ).sort({ score: { $meta: "textScore" } });
-
-  const end = Date.now();
-  console.log(`Products search fetched in ${end - start}ms`);
 
   if (products.length === 0) {
     return res.status(404).json({ message: "No products found" });
   }
+
+  await redisClient.setEx(CACHE_KEY, SEARCH_CACHE_TTL, JSON.stringify(products));
 
   res.json(products);
 });
