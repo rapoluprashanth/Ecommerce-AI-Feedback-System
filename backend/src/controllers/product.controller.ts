@@ -6,21 +6,29 @@ import { log } from "console";
 
 // POST /products
 export const createProduct = asyncHandler(async (req: Request, res: Response) => {
-  const start = Date.now();
-  const products = req.body; // expecting array
+  const products = req.body;
 
   if (!Array.isArray(products)) {
     return res.status(400).json({ message: "Expected an array of products" });
   }
 
   const createdProducts = await Product.insertMany(products);
-  const end = Date.now();
-  console.log(`Products created in ${end - start}ms`);
 
-  res.status(201).json({
-    message: "Products created successfully",
-    count: createdProducts.length,
-    data: createdProducts
+  // invalidate all-products list
+  await redisClient.del("products:all");
+
+  // ONLY affected category caches
+  const affectedCategoryIds = new Set<string>();
+
+  for (const product of products) {
+    affectedCategoryIds.add(product.categoryId.toString());
+  }
+
+  for (const categoryId of affectedCategoryIds) {
+    await redisClient.del(`products:category:${categoryId}`);
+  }
+
+  res.status(201).json({ message: "Products created successfully",count: createdProducts.length,data: createdProducts,
   });
 });
 
@@ -53,12 +61,25 @@ export const getAllProducts = asyncHandler(async (_req: Request, res: Response) 
 
 // GET /products/:id
 export const getProductById = asyncHandler(async (req: Request, res: Response) => {
-  const product = await Product.findById(req.params.id);
+  const { id } = req.params;
+  const CACHE_KEY = `products:byId:${id}`;
+  // Redis check
+  const cachedData = await redisClient.get(CACHE_KEY);
+  if (cachedData) {
+    return res.json(JSON.parse(cachedData));
+  }
+
+  const product = await Product.findById(id);
   if (!product) {
     return res.status(404).json({ message: "Product not found" });
   }
+
+  // Cache result
+  await redisClient.setEx(CACHE_KEY, parseInt(process.env.CACHE_TTL || "3600"), JSON.stringify(product));
+
   res.json(product);
 });
+
 
 // DELETE /products/:id
 export const deleteProduct = asyncHandler(async (req: Request, res: Response) => {
@@ -68,11 +89,25 @@ export const deleteProduct = asyncHandler(async (req: Request, res: Response) =>
     return res.status(404).json({ message: "Product not found" });
   }
 
+  // CACHE INVALIDATION 
+  await redisClient.del("products:all");
+  await redisClient.del(`products:category:${product.categoryId}`);
+  await redisClient.del(`products:byId:${product._id}`);
+
   res.json({ message: "Product deleted successfully" });
 });
 
+
 // PUT /products/:id
 export const updateProduct = asyncHandler(async (req: Request, res: Response) => {
+  const existingProduct = await Product.findById(req.params.id);
+
+  if (!existingProduct) {
+    return res.status(404).json({ message: "Product not found" });
+  }
+
+  const oldCategoryId = existingProduct.categoryId.toString();
+
   const updatedProduct = await Product.findByIdAndUpdate(
     req.params.id,
     req.body,
@@ -80,8 +115,23 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response) =>
   );
 
   if (!updatedProduct) {
-    return res.status(404).json({ message: "Product not found" });
+    return res.status(404).json({ message: "Product not found after update" });
   }
+
+  // invalidate full product list
+  await redisClient.del("products:all");
+
+  // Invalidate old category cache
+  await redisClient.del(`products:category:${oldCategoryId}`);
+  
+  // Invalidate new category cache ONLY if changed
+  const newCategoryId = updatedProduct.categoryId.toString();
+  if (newCategoryId !== oldCategoryId) {
+    await redisClient.del(`products:category:${newCategoryId}`);
+  }
+
+  // Invalidate product by ID cache
+  await redisClient.del(`products:byId:${updatedProduct._id}`);
 
   res.json(updatedProduct);
 });
@@ -113,9 +163,14 @@ export const deleteProductsByCategory = asyncHandler(async (req: Request, res: R
   const { categoryId } = req.params;
 
   const result = await Product.deleteMany({ categoryId });
+
   if (result.deletedCount === 0) {
     return res.status(404).json({ message: "No products found for this category" });
   }
+
+  // CACHE INVALIDATION 
+  await redisClient.del("products:all");
+  await redisClient.del(`products:category:${categoryId}`);
 
   res.json({
     message: "Products deleted successfully",
